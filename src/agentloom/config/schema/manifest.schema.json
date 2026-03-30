@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AgentLoomManifest",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "string" },
+    "mcp_ids": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "skill_ids": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "required": ["version", "mcp_ids", "skill_ids"]
+}
