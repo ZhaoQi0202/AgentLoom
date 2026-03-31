@@ -62,7 +62,7 @@ uv sync
   uv run python -m agentloom --cli
   ```
 
-- **只跑前端页面（不启 Electron）** — 需**另开终端**先启后端，再在 `client/` 执行 `npm run dev`，浏览器打开 **`http://localhost:25527`**。
+- **客户端 UI 与浏览器**：界面**仅应在 Electron 内使用**；在浏览器中直接打开 Vite 开发地址会显示「请使用桌面客户端」。开发阶段若必须在浏览器里调试前端，可在 `client/` 构建/启动前设置 **`VITE_ALLOW_BROWSER=true`**（不要打进给最终用户的包）。
 
 ## 配置与数据
 

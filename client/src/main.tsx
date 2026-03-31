@@ -1,10 +1,20 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './styles/globals.css'
-import App from './App.tsx'
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { BrowserBlocked } from "./components/BrowserBlocked";
+import App from "./App.tsx";
+import "./styles/globals.css";
 
-createRoot(document.getElementById('root')!).render(
+function isDesktopShell(): boolean {
+  if (import.meta.env.VITE_ALLOW_BROWSER === "true") {
+    return true;
+  }
+  return typeof window !== "undefined" && !!window.electronAPI;
+}
+
+const root = document.getElementById("root")!;
+
+createRoot(root).render(
   <StrictMode>
-    <App />
+    {isDesktopShell() ? <App /> : <BrowserBlocked />}
   </StrictMode>,
-)
+);
