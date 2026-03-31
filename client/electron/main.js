@@ -1,5 +1,10 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
+const {
+  startPythonBackend,
+  stopPythonBackend,
+  waitForBackend,
+} = require("./python-manager");
 
 let mainWindow = null;
 
@@ -37,5 +42,45 @@ ipcMain.on("window:maximize", () => {
 });
 ipcMain.on("window:close", () => mainWindow?.close());
 
-app.whenReady().then(createWindow);
-app.on("window-all-closed", () => app.quit());
+// 后端状态 IPC
+ipcMain.handle("backend:status", async () => {
+  const http = require("http");
+  return new Promise((resolve) => {
+    const req = http.get("http://127.0.0.1:9800/health", (res) => {
+      resolve(res.statusCode === 200);
+    });
+    req.on("error", () => resolve(false));
+    req.setTimeout(2000, () => {
+      req.destroy();
+      resolve(false);
+    });
+  });
+});
+
+app.whenReady().then(async () => {
+  try {
+    console.log("[Main] Starting Python backend...");
+    await startPythonBackend();
+    console.log("[Main] Waiting for backend health check...");
+    const ready = await waitForBackend();
+    if (ready) {
+      console.log("[Main] Backend is ready!");
+    } else {
+      console.warn("[Main] Backend health check timed out, continuing anyway...");
+    }
+  } catch (err) {
+    console.error("[Main] Failed to start Python backend:", err.message);
+    // 开发模式下后端可能已手动启动，继续创建窗口
+  }
+
+  createWindow();
+});
+
+app.on("before-quit", () => {
+  stopPythonBackend();
+});
+
+app.on("window-all-closed", () => {
+  stopPythonBackend();
+  app.quit();
+});

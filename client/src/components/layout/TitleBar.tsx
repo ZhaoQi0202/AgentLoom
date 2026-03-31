@@ -6,6 +6,7 @@ declare global {
       minimize: () => void;
       maximize: () => void;
       close: () => void;
+      checkBackend: () => Promise<boolean>;
     };
   }
 }
