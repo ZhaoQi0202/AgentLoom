@@ -5,5 +5,7 @@ __pycache__/
 /dist/
 /build/
 /workspaces/
-/data/
+/data/*
+!/data/skills_install/
+!/data/skills_install/**
 config/settings.json
