@@ -3,6 +3,9 @@ name = "agentloom"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
+    "langchain-anthropic>=1.4.0",
+    "langchain-core>=1.2.23",
+    "langchain-openai>=1.1.12",
     "langgraph>=0.2",
     "langgraph-checkpoint-sqlite>=3.0.3",
     "pydantic>=2",
