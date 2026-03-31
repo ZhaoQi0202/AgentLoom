@@ -2,6 +2,7 @@ from PySide6.QtCore import Qt, QThread
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QSplitter, QVBoxLayout, QWidget
 
 from agentloom.paths import install_root
+from agentloom.ui.dialogs.mcp_editor import McpEditorDialog
 from agentloom.ui.panels.activity_panel import ActivityPanel
 from agentloom.ui.panels.chat_panel import ChatPanel
 from agentloom.ui.panels.task_list import TaskListPanel
@@ -19,8 +20,10 @@ class MainWindow(QWidget):
         self._btn_run_graph = QPushButton("运行图谱")
         self._btn_continue = QPushButton("继续")
         self._btn_continue.setEnabled(False)
+        self._btn_add_mcp = QPushButton("添加 MCP")
         bar.addWidget(self._btn_run_graph)
         bar.addWidget(self._btn_continue)
+        bar.addWidget(self._btn_add_mcp)
         outer.addLayout(bar)
         splitter = QSplitter(Qt.Orientation.Horizontal)
         self._task_list = TaskListPanel()
@@ -44,6 +47,7 @@ class MainWindow(QWidget):
         self._graph_runner.error.connect(self._on_graph_error)
         self._btn_run_graph.clicked.connect(self._on_run_graph_clicked)
         self._btn_continue.clicked.connect(self._on_continue_clicked)
+        self._btn_add_mcp.clicked.connect(self._on_add_mcp_clicked)
         self._graph_thread.start()
 
     def _on_graph_phase(self, node: str, payload: dict) -> None:
@@ -71,3 +75,7 @@ class MainWindow(QWidget):
         self._btn_continue.setEnabled(False)
         self._activity.append_line("继续…")
         self._graph_runner.request_resume()
+
+    def _on_add_mcp_clicked(self) -> None:
+        dlg = McpEditorDialog(config_root=root, parent=self)
+        dlg.exec()
