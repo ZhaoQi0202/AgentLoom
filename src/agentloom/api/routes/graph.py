@@ -114,8 +114,10 @@ def _iter_graph_events(graph: Any, input_obj: Any, cfg: dict) -> Iterator[dict[s
 
 
 async def _pump_graph_to_ws(
-    websocket: WebSocket, graph: Any, input_obj: Any, cfg: dict
-) -> None:
+    websocket: WebSocket, graph: Any, input_obj: Any, cfg: dict,
+    session_id: str = "",
+) -> bool:
+    """Returns True if completed normally, False if paused."""
     q: queue.Queue[Any] = queue.Queue()
 
     def worker() -> None:
@@ -133,10 +135,17 @@ async def _pump_graph_to_ws(
 
     threading.Thread(target=worker, daemon=True).start()
     while True:
-        item = await asyncio.to_thread(q.get)
+        session = _sessions.get(session_id, {})
+        if session.get("paused"):
+            return False
+        try:
+            item = await asyncio.wait_for(asyncio.to_thread(q.get), timeout=0.5)
+        except asyncio.TimeoutError:
+            continue
         if item is _SENTINEL:
             break
         await websocket.send_json(item)
+    return True
 
 
 @router.websocket("/ws/graph/{session_id}")
@@ -172,6 +181,7 @@ async def graph_websocket(websocket: WebSocket, session_id: str):
                     graph,
                     {"task_id": task_id, "user_request": user_request},
                     cfg,
+                    session_id=session_id,
                 )
 
                 _sessions[session_id] = {"graph": graph, "cfg": cfg}
@@ -191,7 +201,18 @@ async def graph_websocket(websocket: WebSocket, session_id: str):
                 cfg = session["cfg"]
                 resume_input = Command(resume=feedback if feedback else {})
 
-                await _pump_graph_to_ws(websocket, graph, resume_input, cfg)
+                session["paused"] = False
+                await _pump_graph_to_ws(websocket, graph, resume_input, cfg, session_id=session_id)
+
+            elif action == "pause":
+                session = _sessions.get(session_id)
+                if session:
+                    session["paused"] = True
+                await websocket.send_json({
+                    "type": "phase_complete",
+                    "timestamp": _ts(),
+                    "content": "项目已暂停",
+                })
 
             else:
                 await websocket.send_json({

@@ -6,11 +6,13 @@ interface ChatStore {
   events: ChatEvent[];
   currentPhase: string | null;
   isRunning: boolean;
+  isPaused: boolean;
   isInterrupted: boolean;
 
   addEvent: (event: ChatEvent) => void;
   clearEvents: () => void;
   startGraph: (taskId: string, userRequest?: string) => void;
+  pauseGraph: () => void;
   resumeGraph: (feedback: string) => void;
 }
 
@@ -18,27 +20,39 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   events: [],
   currentPhase: null,
   isRunning: false,
+  isPaused: false,
   isInterrupted: false,
 
   addEvent: (event) =>
-    set((s) => ({
-      events: [...s.events, event],
-      currentPhase:
-        event.type === "phase_start"
-          ? (event.phase ?? s.currentPhase)
-          : s.currentPhase,
-      isInterrupted: event.type === "hitl_interrupt",
-      isRunning:
+    set((s) => {
+      const isPaused =
+        event.type === "phase_complete" && event.content === "项目已暂停"
+          ? true
+          : s.isPaused;
+      const isRunning =
         event.type === "task_complete" || event.type === "error"
           ? false
-          : s.isRunning,
-    })),
+          : isPaused
+            ? false
+            : s.isRunning;
+      return {
+        events: [...s.events, event],
+        currentPhase:
+          event.type === "phase_start"
+            ? (event.phase ?? s.currentPhase)
+            : s.currentPhase,
+        isInterrupted: event.type === "hitl_interrupt",
+        isRunning,
+        isPaused,
+      };
+    }),
 
   clearEvents: () =>
     set({
       events: [],
       currentPhase: null,
       isRunning: false,
+      isPaused: false,
       isInterrupted: false,
     }),
 
@@ -52,11 +66,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       },
       onEvent: (event) => get().addEvent(event),
     });
-    set({ isRunning: true, isInterrupted: false, events: [] });
+    set({ isRunning: true, isPaused: false, isInterrupted: false, events: [] });
+  },
+
+  pauseGraph: () => {
+    graphSocket.send({ action: "pause" });
   },
 
   resumeGraph: (feedback) => {
     graphSocket.send({ action: "resume", feedback });
-    set({ isInterrupted: false });
+    set({ isInterrupted: false, isPaused: false, isRunning: true });
   },
 }));

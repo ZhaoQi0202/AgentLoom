@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Play, RotateCcw } from "lucide-react";
+import { Play, Pause, RotateCcw } from "lucide-react";
 import { useChatStore } from "../../stores/chatStore";
 import { useTaskStore } from "../../stores/taskStore";
 import { StatusBadge } from "../shared/StatusBadge";
@@ -11,7 +11,7 @@ import { ChatInput } from "./ChatInput";
 import { AGENT_META, AgentId, ChatEvent } from "../../types";
 
 export function ChatArea() {
-  const { events, isRunning, isInterrupted, startGraph, clearEvents } = useChatStore();
+  const { events, isRunning, isPaused, isInterrupted, startGraph, pauseGraph, clearEvents } = useChatStore();
   const { activeTaskId, tasks } = useTaskStore();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -37,11 +37,13 @@ export function ChatArea() {
 
   const status = isRunning
     ? "running"
-    : isInterrupted
+    : isPaused
       ? "paused"
-      : events.some((e) => e.type === "task_complete")
-        ? "completed"
-        : "idle";
+      : isInterrupted
+        ? "paused"
+        : events.some((e) => e.type === "task_complete")
+          ? "completed"
+          : "idle";
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -54,25 +56,48 @@ export function ChatArea() {
           <StatusBadge status={status} />
         </div>
         <div className="flex items-center gap-2">
-          {!isRunning && (
+          {isRunning && !isPaused && (
+            <button
+              onClick={pauseGraph}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium glass glass-hover text-status-warning"
+            >
+              <Pause size={12} />
+              暂停项目
+            </button>
+          )}
+          {isPaused && (
+            <>
+              <button
+                onClick={() => {
+                  useChatStore.getState().resumeGraph("继续执行");
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium glass glass-hover text-status-success"
+              >
+                <Play size={12} />
+                继续项目
+              </button>
+              <button
+                onClick={() => {
+                  clearEvents();
+                  startGraph(activeTask.id, activeTask.name);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium glass glass-hover text-text-secondary"
+              >
+                <RotateCcw size={12} />
+                重新开始
+              </button>
+            </>
+          )}
+          {!isRunning && !isPaused && (
             <button
               onClick={() => {
                 clearEvents();
                 startGraph(activeTask.id, activeTask.name);
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium glass glass-hover"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium glass glass-hover text-status-success"
             >
-              {events.length > 0 ? (
-                <>
-                  <RotateCcw size={12} />
-                  重新运行
-                </>
-              ) : (
-                <>
-                  <Play size={12} />
-                  运行图谱
-                </>
-              )}
+              <Play size={12} />
+              启动项目
             </button>
           )}
         </div>
