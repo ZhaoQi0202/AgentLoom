@@ -36,18 +36,32 @@ _AGENT_LABELS: dict[str, str] = {
 
 
 def _iter_graph_events(graph: Any, input_obj: Any, cfg: dict) -> Iterator[dict[str, Any]]:
+    # Before starting stream, predict the first node and send thinking
+    try:
+        st = graph.get_state(cfg)
+        for nxt_node in (st.next or []):
+            label = _AGENT_LABELS.get(nxt_node, nxt_node)
+            yield {
+                "type": "phase_start",
+                "timestamp": _ts(),
+                "phase": nxt_node,
+                "agent": nxt_node,
+                "content": f"{label} 加入群聊",
+            }
+            yield {
+                "type": "agent_thinking",
+                "timestamp": _ts(),
+                "phase": nxt_node,
+                "agent": nxt_node,
+                "content": "",
+            }
+    except Exception:
+        pass  # First start has no state yet
+
     for chunk in graph.stream(input_obj, cfg, stream_mode="updates"):
         parts, has_interrupt = split_stream_chunk(chunk)
         for node, upd in parts:
             phase = upd.get("phase", node)
-            label = _AGENT_LABELS.get(node, node)
-            yield {
-                "type": "phase_start",
-                "timestamp": _ts(),
-                "phase": phase,
-                "agent": node,
-                "content": f"{label} 加入群聊",
-            }
             content = upd.get("message") or json.dumps(upd, ensure_ascii=False, default=str)
             yield {
                 "type": "agent_output",
@@ -56,10 +70,34 @@ def _iter_graph_events(graph: Any, input_obj: Any, cfg: dict) -> Iterator[dict[s
                 "agent": node,
                 "content": content,
             }
+            # After each node completes, check for next node and send thinking
+            try:
+                st = graph.get_state(cfg)
+                for nxt_node in (st.next or []):
+                    if nxt_node == node:
+                        continue
+                    label = _AGENT_LABELS.get(nxt_node, nxt_node)
+                    yield {
+                        "type": "phase_start",
+                        "timestamp": _ts(),
+                        "phase": nxt_node,
+                        "agent": nxt_node,
+                        "content": f"{label} 加入群聊",
+                    }
+                    yield {
+                        "type": "agent_thinking",
+                        "timestamp": _ts(),
+                        "phase": nxt_node,
+                        "agent": nxt_node,
+                        "content": "",
+                    }
+            except Exception:
+                pass
         if has_interrupt:
             st = graph.get_state(cfg)
             nxt = st.next[0] if st.next else ""
-            interrupt_msg = f"图谱在 {nxt} 阶段中断，等待人工输入"
+            label = _AGENT_LABELS.get(nxt, nxt)
+            interrupt_msg = f"{label} 等待人工审核"
             yield {
                 "type": "hitl_interrupt",
                 "timestamp": _ts(),
@@ -71,7 +109,7 @@ def _iter_graph_events(graph: Any, input_obj: Any, cfg: dict) -> Iterator[dict[s
     yield {
         "type": "task_complete",
         "timestamp": _ts(),
-        "content": "任务完成",
+        "content": "项目执行完成",
     }
 
 

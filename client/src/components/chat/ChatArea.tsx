@@ -8,6 +8,7 @@ import { AgentMessage } from "./AgentMessage";
 import { UserMessage } from "./UserMessage";
 import { HITLCard } from "./HITLCard";
 import { ChatInput } from "./ChatInput";
+import { AGENT_META, AgentId, ChatEvent } from "../../types";
 
 export function ChatArea() {
   const { events, isRunning, isInterrupted, startGraph, clearEvents } = useChatStore();
@@ -90,7 +91,14 @@ export function ChatArea() {
               case "phase_complete":
               case "task_complete":
                 return <SystemMessage key={i} event={event} />;
-              case "agent_thinking":
+              case "agent_thinking": {
+                // Skip if a later agent_output from the same agent exists
+                const hasLaterOutput = events.slice(i + 1).some(
+                  (e) => e.type === "agent_output" && e.agent === event.agent
+                );
+                if (hasLaterOutput) return null;
+                return <ThinkingBubble key={i} event={event} />;
+              }
               case "agent_output":
                 return <AgentMessage key={i} event={event} />;
               case "hitl_interrupt":
@@ -116,6 +124,32 @@ function ErrorCard({ event }: { event: { content?: string; timestamp: string } }
   return (
     <div className="mx-4 my-2 p-3 border border-status-error/30 bg-status-error/5 rounded-[var(--radius-card)] text-sm text-status-error">
       {event.content || "发生错误"}
+    </div>
+  );
+}
+
+function ThinkingBubble({ event }: { event: ChatEvent }) {
+  const meta = event.agent ? AGENT_META[event.agent as AgentId] : null;
+  if (!meta) return null;
+
+  return (
+    <div className="flex gap-3 px-5 py-2">
+      <div
+        className="w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0"
+        style={{ background: `linear-gradient(135deg, ${meta.gradient[0]}, ${meta.gradient[1]})` }}
+      >
+        {meta.emoji}
+      </div>
+      <div>
+        <span className="text-xs font-semibold" style={{ color: meta.nameColor }}>
+          {meta.label}
+        </span>
+        <div className="mt-1 px-3 py-2 rounded-[0_12px_12px_12px] glass">
+          <div className="typing-dots">
+            <span /><span /><span />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
