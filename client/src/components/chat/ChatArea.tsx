@@ -69,7 +69,7 @@ export function ChatArea() {
         <div className="flex items-center gap-2">
           {isCollecting && (
             <button
-              onClick={() => confirmStart(activeTask.id)}
+              onClick={() => confirmStart(activeTask.id, activeTask.name)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium glass glass-hover text-status-success"
             >
               <Play size={12} />
@@ -108,7 +108,7 @@ export function ChatArea() {
               </button>
             </>
           )}
-          {!isRunning && !isPaused && (
+          {!isRunning && !isPaused && !isCollecting && (
             <button
               onClick={() => {
                 clearEvents();
