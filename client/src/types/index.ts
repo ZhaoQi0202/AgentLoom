@@ -85,34 +85,34 @@ export interface AgentMeta {
 
 export const AGENT_META: Record<AgentId, AgentMeta> = {
   consultant: {
-    label: "Consultant",
+    label: "需求分析师",
     emoji: "\u{1F50D}",
     gradient: ["#8b5cf6", "#6366f1"],
-    nameColor: "#c4b5fd",
+    nameColor: "#7c3aed",
   },
   architect: {
-    label: "Architect",
+    label: "架构设计师",
     emoji: "\u{1F4D0}",
     gradient: ["#3b82f6", "#06b6d4"],
-    nameColor: "#93c5fd",
+    nameColor: "#2563eb",
   },
   hitl_blueprint: {
-    label: "HITL Blueprint",
+    label: "方案审核员",
     emoji: "\u23F8",
     gradient: ["#f59e0b", "#f97316"],
-    nameColor: "#fcd34d",
+    nameColor: "#d97706",
   },
   experts: {
-    label: "Expert (Swarm)",
+    label: "执行专家组",
     emoji: "\u26A1",
     gradient: ["#22c55e", "#10b981"],
-    nameColor: "#86efac",
+    nameColor: "#16a34a",
   },
   reviewer: {
-    label: "Reviewer",
+    label: "质量审查员",
     emoji: "\u{1F50E}",
     gradient: ["#ec4899", "#f43f5e"],
-    nameColor: "#f9a8d4",
+    nameColor: "#db2777",
   },
 };
 
