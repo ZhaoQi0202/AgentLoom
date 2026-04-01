@@ -1,42 +1,26 @@
-import { motion } from "framer-motion";
 import type { ChatEvent } from "../../types";
-import { AGENT_META, type AgentId } from "../../types";
+import { AGENT_META } from "../../types";
+import type { AgentId } from "../../types";
 
-interface SystemMessageProps {
-  event: ChatEvent;
-}
+export function SystemMessage({ event }: { event: ChatEvent }) {
+  const isJoin = event.type === "phase_start" && event.agent;
+  const meta = event.agent ? AGENT_META[event.agent as AgentId] : null;
 
-export function SystemMessage({ event }: SystemMessageProps) {
-  let text = "";
-  if (event.type === "phase_start") {
-    const meta = event.agent ? AGENT_META[event.agent as AgentId] : null;
-    const label = meta ? `${meta.emoji} ${meta.label}` : event.phase;
-    text = `\u2192 阶段: ${label}`;
-  } else if (event.type === "phase_complete") {
-    text = event.content || "阶段完成";
-  } else if (event.type === "task_complete") {
-    text = event.content || "任务完成";
-  } else {
-    text = event.content || "";
+  if (isJoin && meta) {
+    return (
+      <div className="flex justify-center my-3">
+        <span className="text-xs px-3 py-1 rounded-full bg-black/5 text-text-secondary">
+          {meta.emoji} {meta.label} 加入群聊
+        </span>
+      </div>
+    );
   }
 
-  const isComplete = event.type === "task_complete";
-
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex justify-center my-3"
-    >
-      <span
-        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs
-          ${isComplete
-            ? "bg-status-success/10 text-status-success border border-status-success/20"
-            : "bg-bg-elevated text-text-muted border border-border-subtle"
-          }`}
-      >
-        {text}
+    <div className="flex justify-center my-3">
+      <span className="text-xs px-3 py-1 rounded-full bg-black/5 text-text-secondary">
+        {event.content}
       </span>
-    </motion.div>
+    </div>
   );
 }

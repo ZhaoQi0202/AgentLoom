@@ -26,17 +26,27 @@ def _ts() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+_AGENT_LABELS: dict[str, str] = {
+    "consultant": "需求分析师",
+    "architect": "架构设计师",
+    "hitl_blueprint": "方案审核员",
+    "experts": "执行专家组",
+    "reviewer": "质量审查员",
+}
+
+
 def _iter_graph_events(graph: Any, input_obj: Any, cfg: dict) -> Iterator[dict[str, Any]]:
     for chunk in graph.stream(input_obj, cfg, stream_mode="updates"):
         parts, has_interrupt = split_stream_chunk(chunk)
         for node, upd in parts:
             phase = upd.get("phase", node)
+            label = _AGENT_LABELS.get(node, node)
             yield {
                 "type": "phase_start",
                 "timestamp": _ts(),
                 "phase": phase,
                 "agent": node,
-                "content": f"阶段: {node}",
+                "content": f"{label} 加入群聊",
             }
             content = upd.get("message") or json.dumps(upd, ensure_ascii=False, default=str)
             yield {
@@ -116,7 +126,7 @@ async def graph_websocket(websocket: WebSocket, session_id: str):
                     "type": "phase_start",
                     "timestamp": _ts(),
                     "phase": "pending",
-                    "content": "已收到任务，正在运行图谱…",
+                    "content": "项目已启动，Agent 正在就位…",
                 })
 
                 await _pump_graph_to_ws(
