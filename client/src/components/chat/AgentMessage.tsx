@@ -35,11 +35,11 @@ export function AgentMessage({ event }: AgentMessageProps) {
         </div>
 
         {/* 消息气泡 */}
-        <div className="glass rounded-tl-sm p-3 text-sm text-text-body leading-relaxed">
+        <div className="bg-white/80 backdrop-blur-sm border border-black/5 shadow-sm rounded-tl-sm p-3 text-sm text-text-body leading-relaxed">
           {isThinking ? (
             <ThinkingDots />
           ) : (
-            <div className="prose-invert prose-sm max-w-none [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1">
+            <div className="prose prose-sm max-w-none [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1">
               <ReactMarkdown>{event.content || ""}</ReactMarkdown>
             </div>
           )}
