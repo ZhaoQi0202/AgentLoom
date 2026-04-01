@@ -34,7 +34,7 @@ export function TaskList() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜索任务..."
+            placeholder="搜索项目组..."
             className="bg-transparent outline-none text-text-primary placeholder:text-text-disabled flex-1 min-w-0"
           />
         </div>
@@ -52,7 +52,7 @@ export function TaskList() {
                 if (e.key === "Enter") handleCreate();
                 if (e.key === "Escape") setIsCreating(false);
               }}
-              placeholder="任务名称..."
+              placeholder="项目组名称..."
               className="w-full bg-transparent outline-none text-sm text-text-primary placeholder:text-text-disabled"
             />
             <div className="flex gap-2">
@@ -76,7 +76,7 @@ export function TaskList() {
             className="w-full flex items-center justify-center gap-1.5 py-2 text-sm rounded-[var(--radius-card)] gradient-brand-border text-text-secondary hover:text-text-primary transition-colors"
           >
             <Plus size={14} />
-            新建任务
+            新建项目组
           </button>
         )}
       </div>

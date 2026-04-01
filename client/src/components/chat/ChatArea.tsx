@@ -28,8 +28,8 @@ export function ChatArea() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3">
         <div className="w-16 h-16 rounded-2xl gradient-brand opacity-20" />
-        <p className="text-text-muted text-sm">选择一个任务开始对话</p>
-        <p className="text-text-disabled text-xs">或在左侧创建新任务</p>
+        <p className="text-text-muted text-sm">选择一个项目组开始协作</p>
+        <p className="text-text-disabled text-xs">或在左侧创建新项目组</p>
       </div>
     );
   }
@@ -81,7 +81,7 @@ export function ChatArea() {
       <div ref={scrollRef} className="flex-1 overflow-y-auto py-4">
         {events.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-2">
-            <p className="text-text-muted text-sm">点击「运行图谱」启动任务</p>
+            <p className="text-text-muted text-sm">新项目组已创建，等待启动...</p>
           </div>
         ) : (
           events.map((event, i) => {
