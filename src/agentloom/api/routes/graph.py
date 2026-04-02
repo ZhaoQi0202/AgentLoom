@@ -21,6 +21,7 @@ from agentloom.graph.nodes.consultant_agent import (
     build_initial_greeting,
     consult_turn,
     extract_requirement,
+    strip_summary_block,
 )
 from agentloom.paths import workspaces_dir
 from agentloom.tasks.requirement import save_requirement
@@ -218,12 +219,15 @@ async def graph_websocket(websocket: WebSocket, session_id: str):
                         if summary:
                             session["consultant_summary"] = summary
 
+                    # 剥离 JSON 块，展示友好格式
+                    display_text = strip_summary_block(text, summary) if is_ready else text
+
                     await websocket.send_json({
                         "type": "agent_output",
                         "timestamp": _ts(),
                         "phase": "consult",
                         "agent": "consultant",
-                        "content": text,
+                        "content": display_text,
                         "metadata": metadata,
                     })
 

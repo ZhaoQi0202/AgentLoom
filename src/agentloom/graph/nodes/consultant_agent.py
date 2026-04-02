@@ -55,6 +55,45 @@ _SUMMARY_PATTERN = re.compile(
 )
 
 
+def strip_summary_block(text: str, summary: dict | None = None) -> str:
+    """从 LLM 回复中剥离 requirement_summary JSON 块，替换为友好的格式化摘要。"""
+    # 去掉 JSON 代码块
+    clean = _SUMMARY_PATTERN.sub("", text).strip()
+
+    if summary:
+        # 用友好格式展示摘要
+        lines = ["\n📋 **需求摘要**\n"]
+        if summary.get("project_name"):
+            lines.append(f"**项目名称：** {summary['project_name']}")
+        if summary.get("core_goal"):
+            lines.append(f"**核心目标：** {summary['core_goal']}")
+        constraints = summary.get("constraints", {})
+        if constraints.get("tech_stack"):
+            lines.append(f"**技术栈：** {', '.join(constraints['tech_stack'])}")
+        if constraints.get("platform"):
+            lines.append(f"**平台：** {constraints['platform']}")
+        if constraints.get("timeline"):
+            lines.append(f"**时间要求：** {constraints['timeline']}")
+        criteria = summary.get("success_criteria", [])
+        if criteria:
+            lines.append("**成功标准：**")
+            for c in criteria:
+                lines.append(f"  - {c}")
+        features = summary.get("features", [])
+        if features:
+            lines.append("**功能点：**")
+            for f in features:
+                priority_map = {"must": "必须", "should": "应该", "nice_to_have": "可选"}
+                p = priority_map.get(f.get("priority", ""), f.get("priority", ""))
+                lines.append(f"  - {f.get('name', '?')}（{p}）: {f.get('description', '')}")
+        if summary.get("additional_notes"):
+            lines.append(f"**备注：** {summary['additional_notes']}")
+
+        clean = clean + "\n" + "\n".join(lines) if clean else "\n".join(lines)
+
+    return clean
+
+
 def build_initial_greeting() -> str:
     """返回 Consultant 的开场白。"""
     return (
