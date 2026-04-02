@@ -18,3 +18,4 @@ class AgentLoomState(TypedDict, total=False):
     gap_decision: str
     architect_gap_notes: str
     message: str            # 当前节点输出给对话流的消息
+    _thread_id: str  # 内部：event_bus 路由用

@@ -79,6 +79,10 @@ async def _pump_graph_to_ws(
     websocket: WebSocket, graph: Any, input_obj: Any, cfg: dict
 ) -> None:
     q: queue.Queue[Any] = queue.Queue()
+    thread_id = cfg.get("configurable", {}).get("thread_id", "")
+
+    from agentloom.graph.event_bus import register_queue, unregister_queue
+    register_queue(thread_id, q)
 
     def worker() -> None:
         try:
@@ -91,6 +95,7 @@ async def _pump_graph_to_ws(
                 "content": str(exc),
             })
         finally:
+            unregister_queue(thread_id)
             q.put(_SENTINEL)
 
     threading.Thread(target=worker, daemon=True).start()
@@ -132,7 +137,7 @@ async def graph_websocket(websocket: WebSocket, session_id: str):
                 await _pump_graph_to_ws(
                     websocket,
                     graph,
-                    {"task_id": task_id, "user_request": user_request},
+                    {"task_id": task_id, "user_request": user_request, "_thread_id": thread_id},
                     cfg,
                 )
 
@@ -272,7 +277,7 @@ async def graph_websocket(websocket: WebSocket, session_id: str):
                 await _pump_graph_to_ws(
                     websocket,
                     graph,
-                    {"task_id": task_id, "user_request": user_request},
+                    {"task_id": task_id, "user_request": user_request, "_thread_id": thread_id},
                     cfg,
                 )
 
