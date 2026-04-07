@@ -10,7 +10,7 @@ import { ChatInput } from "./ChatInput";
 import { AGENT_META, type AgentId, type ChatEvent } from "../../types";
 
 export function ChatArea() {
-  const { events, isRunning, isPaused, isInterrupted, isCollecting, startCollect } = useChatStore();
+  const { events, pendingEvents, isRunning, isPaused, isInterrupted, isCollecting, startCollect } = useChatStore();
   const { activeTaskId, tasks } = useTaskStore();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -45,7 +45,7 @@ export function ChatArea() {
     );
   }
 
-  const status = isRunning
+  const status = isRunning || isCollecting
     ? "running"
     : isPaused
       ? "paused"
@@ -75,10 +75,17 @@ export function ChatArea() {
               {isCollecting ? "正在连接需求分析师..." : "等待对话..."}
             </p>
           </div>
-        ) : (
-          events.map((event, i) => {
+        ) : (() => {
+          // 维护已入群 agent 集合，同一 agent 只渲染一次入群提示
+          const joinedAgents = new Set<string>();
+          return events.map((event, i) => {
             switch (event.type) {
-              case "agent_join":
+              case "agent_join": {
+                const agentKey = event.agent ?? "";
+                if (joinedAgents.has(agentKey)) return null;
+                joinedAgents.add(agentKey);
+                return <SystemMessage key={i} event={event} />;
+              }
               case "phase_start":
               case "phase_complete":
               case "task_complete":
@@ -102,8 +109,14 @@ export function ChatArea() {
               default:
                 return null;
             }
-          })
-        )}
+          });
+        })()}
+        {/* pending agent_output 打字气泡 */}
+        {pendingEvents
+          .filter((e) => e.type === "agent_output")
+          .map((e, i) => (
+            <ThinkingBubble key={`pending-${i}`} event={e} />
+          ))}
       </div>
 
       {/* 底部输入区 */}
