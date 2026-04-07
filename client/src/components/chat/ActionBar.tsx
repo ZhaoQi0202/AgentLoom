@@ -11,12 +11,23 @@ export function ActionBar() {
   const { activeTaskId } = useTaskStore();
 
   const completed = events.some((e) => e.type === "task_complete");
-  const visible =
-    !isCollecting && (isRunning || isPaused) && !completed;
+
+  // 在收集、运行、暂停阶段均显示；完成后隐藏
+  const visible = (isCollecting || isRunning || isPaused) && !completed;
 
   if (!visible || !activeTaskId) return null;
 
   const running = isRunning && !isPaused;
+
+  // 收集阶段只显示状态，不显示操作按钮
+  if (isCollecting) {
+    return (
+      <div className="mb-2 flex items-center gap-3 rounded-xl glass px-3 py-2 border border-border-subtle/60">
+        <span className="h-2 w-2 rounded-full shrink-0 bg-status-success animate-pulse" />
+        <span className="text-xs font-medium text-text-secondary">需求收集中</span>
+      </div>
+    );
+  }
 
   return (
     <>

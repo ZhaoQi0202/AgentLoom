@@ -15,22 +15,30 @@ export class GraphSocket {
       onEvent?: EventHandler;
     },
   ) {
-    this.disconnect();
+    // 先关掉旧连接，但要捕获旧 ws 引用，避免其 onclose 覆盖新 ws
+    const oldWs = this.ws;
+    if (oldWs) {
+      oldWs.onclose = null;
+      oldWs.onmessage = null;
+      oldWs.onerror = null;
+      oldWs.close();
+    }
     this.handlers.clear();
     if (options?.onEvent) {
       this.handlers.add(options.onEvent);
     }
 
     const url = `${WS_BASE}/ws/graph/${sessionId}`;
-    this.ws = new WebSocket(url);
+    const ws = new WebSocket(url);
+    this.ws = ws;
 
-    this.ws.onopen = () => {
-      if (options?.initial && this.ws?.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify(options.initial));
+    ws.onopen = () => {
+      if (options?.initial && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(options.initial));
       }
     };
 
-    this.ws.onmessage = (e) => {
+    ws.onmessage = (e) => {
       try {
         const event: ChatEvent = JSON.parse(e.data);
         this.handlers.forEach((h) => h(event));
@@ -39,11 +47,13 @@ export class GraphSocket {
       }
     };
 
-    this.ws.onclose = () => {
-      this.ws = null;
+    ws.onclose = () => {
+      if (this.ws === ws) {
+        this.ws = null;
+      }
     };
 
-    this.ws.onerror = (err) => {
+    ws.onerror = (err) => {
       console.error("[GraphSocket] Error:", err);
     };
   }
@@ -60,8 +70,14 @@ export class GraphSocket {
   }
 
   disconnect() {
-    this.ws?.close();
-    this.ws = null;
+    const ws = this.ws;
+    if (ws) {
+      ws.onclose = null;
+      ws.onmessage = null;
+      ws.onerror = null;
+      ws.close();
+      this.ws = null;
+    }
   }
 
   get connected(): boolean {
