@@ -6,7 +6,7 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from agentloom.graph.nodes.architect_agent import generate_blueprint
+from agentloom.graph.nodes.architect_agent import generate_blueprint, format_blueprint_message
 from agentloom.graph.orchestrator import run_orchestration
 from agentloom.graph.state import AgentLoomState
 from agentloom.llm.factory import get_chat_model
@@ -59,11 +59,13 @@ def architect(state: AgentLoomState) -> dict[str, Any]:
     if blueprint and task_path and task_path.exists():
         save_blueprint(task_path, blueprint)
 
+    display_message = format_blueprint_message(message, blueprint)
+
     return {
         "phase": "architect",
         "blueprint": blueprint or {"raw": message},
         "architect_gap_notes": "",
-        "message": message,
+        "message": display_message,
     }
 
 

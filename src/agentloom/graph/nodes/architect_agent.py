@@ -138,3 +138,48 @@ def generate_blueprint(
 
     blueprint = _parse_blueprint(text)
     return text, blueprint
+
+
+def format_blueprint_message(text: str, blueprint: dict | None) -> str:
+    """将架构师 LLM 回复转为可读群聊消息。
+
+    剥离 ```blueprint 代码块，用 blueprint dict 生成人类可读任务清单。
+    若 blueprint 为空则直接返回剥离代码块后的文本。
+    """
+    import re as _re
+
+    # 剥离 ```blueprint ... ``` 块
+    clean = _BLUEPRINT_PATTERN.sub("", text).strip()
+    # 清理多余空行
+    clean = _re.sub(r"\n{3,}", "\n\n", clean).strip()
+
+    if not blueprint or not blueprint.get("tasks"):
+        return clean or text
+
+    tasks = blueprint["tasks"]
+    task_map = {t["id"]: t.get("name", t["id"]) for t in tasks}
+
+    lines = [f"方案出炉！一共 {len(tasks)} 个任务，按顺序推进 👇\n"]
+
+    for t in tasks:
+        name = t.get("name", t.get("id", "?"))
+        goal = t.get("goal", "")
+        tools = t.get("tools", [])
+        deps = t.get("depends_on", [])
+        dep_names = [task_map.get(d, d) for d in deps]
+
+        header = f"📌 **{name}**"
+        if dep_names:
+            header += f"（依赖：{'、'.join(dep_names)}）"
+        lines.append(header)
+        if goal:
+            lines.append(f"目标：{goal}")
+        if tools:
+            lines.append(f"工具：{', '.join(tools)}")
+        lines.append("")
+
+    # 追加 LLM 的活泼总结语（如果有）
+    if clean:
+        lines.append(clean)
+
+    return "\n".join(lines).strip()
