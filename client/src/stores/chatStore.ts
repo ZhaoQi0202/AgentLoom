@@ -14,6 +14,7 @@ interface ChatStore {
   isPaused: boolean;
   isCollecting: boolean;
   isConsultantThinking: boolean;
+  quickReplies: string[];
 
   addEvent: (event: ChatEvent) => void;
   clearEvents: () => void;
@@ -23,6 +24,8 @@ interface ChatStore {
   pauseGraph: () => void;
   resumeGraph: (feedback: string) => void;
   restartProject: (taskId: string) => void;
+  setQuickReplies: (replies: string[]) => void;
+  sendDecision: (decision: string) => void;
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
@@ -34,6 +37,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isPaused: false,
   isCollecting: false,
   isConsultantThinking: false,
+  quickReplies: [],
 
   addEvent: (event) => {
     // 去重：如果 events 中已有相同事件则跳过
@@ -69,6 +73,24 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
     // 非 agent_output：直接处理
     set((s) => {
+      // hitl_retry_limit：设置快捷回复
+      if (event.type === "hitl_retry_limit") {
+        // quick_replies 在前面的 agent_output 事件的 metadata 中
+        const allEvents = [...s.events, ...s.pendingEvents];
+        const lastOutput = [...allEvents].reverse().find(
+          (e) => e.type === "agent_output" && e.metadata?.quick_replies
+        );
+        const replies =
+          ((event.metadata?.quick_replies as string[]) ||
+            (lastOutput?.metadata?.quick_replies as string[]) ||
+            []);
+        return {
+          events: [...s.events, event],
+          quickReplies: replies.length > 0 ? replies : s.quickReplies,
+          isInterrupted: true,
+        };
+      }
+
       const isConsultantThinking =
         event.type === "agent_thinking" && s.isCollecting
           ? true
@@ -105,6 +127,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       isPaused: false,
       isCollecting: false,
       isConsultantThinking: false,
+      quickReplies: [],
     }),
 
   startCollect: async (taskId: string) => {
@@ -166,17 +189,35 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   pauseGraph: () => {
+    graphSocket.send({ action: "pause" });
     set({ isPaused: true });
   },
 
   resumeGraph: (feedback) => {
-    graphSocket.send({ action: "resume", feedback });
-    set({ isInterrupted: false, isPaused: false });
+    const state = get();
+    if (state.isPaused) {
+      graphSocket.send({ action: "resume_pause" });
+    } else {
+      graphSocket.send({ action: "resume", feedback });
+    }
+    set({ isInterrupted: false, isPaused: false, quickReplies: [] });
   },
 
   restartProject: (taskId: string) => {
     graphSocket.disconnect();
     get().clearEvents();
     get().startCollect(taskId);
+  },
+
+  setQuickReplies: (replies) => set({ quickReplies: replies }),
+
+  sendDecision: (decision) => {
+    // 将中文快捷回复映射为英文决策类型
+    let mapped = decision;
+    if (decision.includes("跳过")) mapped = "skip";
+    else if (decision.includes("明哲") || decision.includes("重")) mapped = "reroute";
+    else if (decision.includes("终止")) mapped = "terminate";
+    graphSocket.send({ action: "decision", decision: mapped });
+    set({ quickReplies: [], isInterrupted: false });
   },
 }));

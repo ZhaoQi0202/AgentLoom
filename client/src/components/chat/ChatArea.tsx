@@ -102,6 +102,9 @@ export function ChatArea() {
                 return <AgentMessage key={i} event={event} />;
               case "hitl_interrupt":
                 return <HITLCard key={i} event={event} />;
+              case "hitl_retry_limit":
+                // 快捷回复由 ChatInput 渲染，这里只渲染前一条铁口消息
+                return null;
               case "user_response":
                 return <UserMessage key={i} event={event} />;
               case "error":

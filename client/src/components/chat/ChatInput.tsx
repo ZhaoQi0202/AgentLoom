@@ -6,7 +6,7 @@ import { ActionBar } from "./ActionBar";
 export function ChatInput() {
   const [text, setText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { isInterrupted, isRunning, isCollecting, isConsultantThinking, resumeGraph, sendCollectMessage, addEvent } = useChatStore();
+  const { isInterrupted, isRunning, isCollecting, isConsultantThinking, quickReplies, resumeGraph, sendCollectMessage, addEvent, sendDecision } = useChatStore();
 
   // HITL 中断时自动聚焦输入框
   useEffect(() => {
@@ -37,6 +37,15 @@ export function ChatInput() {
     setText("");
   };
 
+  const handleQuickReply = (reply: string) => {
+    addEvent({
+      type: "user_response",
+      timestamp: new Date().toISOString(),
+      content: reply,
+    });
+    sendDecision(reply);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -48,6 +57,20 @@ export function ChatInput() {
 
   return (
     <div className="p-4 border-t border-border-subtle">
+      {/* 快捷回复按钮 */}
+      {quickReplies.length > 0 && (
+        <div className="flex gap-2 mb-2 flex-wrap">
+          {quickReplies.map((reply) => (
+            <button
+              key={reply}
+              onClick={() => handleQuickReply(reply)}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg glass glass-hover text-text-primary border border-border-subtle"
+            >
+              {reply}
+            </button>
+          ))}
+        </div>
+      )}
       <ActionBar />
       <div className="glass flex items-end gap-2 p-2">
         <textarea

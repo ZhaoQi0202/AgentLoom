@@ -83,12 +83,16 @@ async def _pump_graph_to_ws(
     thread_id = cfg.get("configurable", {}).get("thread_id", "")
 
     from agentcrewchat.graph.event_bus import register_queue, register_thread_task, unregister_queue
+    from agentcrewchat.graph.pause_manager import cleanup as pause_cleanup, create_pause_signal
     register_queue(thread_id, q)
 
     # 关联 thread_id → task_id 用于聊天历史持久化
     task_id = input_obj.get("task_id", "") if isinstance(input_obj, dict) else ""
     if task_id:
         register_thread_task(thread_id, task_id)
+
+    # 创建暂停信号
+    create_pause_signal(thread_id)
 
     def worker() -> None:
         try:
@@ -102,6 +106,7 @@ async def _pump_graph_to_ws(
             })
         finally:
             unregister_queue(thread_id)
+            pause_cleanup(thread_id)
             q.put(_SENTINEL)
 
     threading.Thread(target=worker, daemon=True).start()
@@ -134,6 +139,7 @@ async def _run_pipeline_after_confirm(
 
     session["graph"] = graph_new
     session["cfg"] = cfg_new
+    session["thread_id"] = thread_id_new
     session["consultant_ready"] = False
 
     summary_dict = session.get("consultant_summary")
@@ -222,7 +228,7 @@ async def graph_websocket(websocket: WebSocket, session_id: str):
                     cfg,
                 )
 
-                _sessions[session_id] = {"graph": graph, "cfg": cfg}
+                _sessions[session_id] = {"graph": graph, "cfg": cfg, "thread_id": thread_id}
 
             elif action == "resume":
                 feedback = msg.get("feedback", {})
@@ -308,6 +314,39 @@ async def graph_websocket(websocket: WebSocket, session_id: str):
                         "agent": "consultant",
                         "content": display_text,
                     })
+
+            elif action == "pause":
+                from agentcrewchat.graph.pause_manager import pause as pm_pause
+                session = _sessions.get(session_id)
+                if session and session.get("thread_id"):
+                    pm_pause(session["thread_id"])
+                    await websocket.send_json({
+                        "type": "agent_output",
+                        "timestamp": _ts(),
+                        "phase": "experts",
+                        "agent": "experts",
+                        "content": "收到暂停指令，当前任务完成后将暂停 ⏸️",
+                    })
+
+            elif action == "resume_pause":
+                from agentcrewchat.graph.pause_manager import resume as pm_resume
+                session = _sessions.get(session_id)
+                if session and session.get("thread_id"):
+                    pm_resume(session["thread_id"])
+
+            elif action == "decision":
+                from agentcrewchat.graph.decision_handler import submit_decision, classify_user_input
+                session = _sessions.get(session_id)
+                decision_type = msg.get("decision", "")
+                user_text = msg.get("message", "")
+                thread_id = session.get("thread_id", "") if session else ""
+
+                if decision_type in ("skip", "reroute", "terminate"):
+                    submit_decision(thread_id, decision_type)
+                elif user_text:
+                    can_reroute = not session.get("_can_rerouted", False) if session else True
+                    decision_type = classify_user_input(user_text, can_reroute)
+                    submit_decision(thread_id, decision_type)
 
             elif action == "confirm_start":
                 session = _sessions.get(session_id)

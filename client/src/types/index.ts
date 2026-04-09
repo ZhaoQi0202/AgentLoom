@@ -62,6 +62,7 @@ export type ChatEventType =
   | "agent_thinking"
   | "agent_output"
   | "hitl_interrupt"
+  | "hitl_retry_limit"
   | "user_response"
   | "phase_complete"
   | "task_complete"
