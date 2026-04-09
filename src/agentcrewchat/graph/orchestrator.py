@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from agentcrewchat.graph.event_bus import emit_event
+from agentcrewchat.graph.executor_identity import create_executor_identity
 from agentcrewchat.graph.nodes.react_agent import run_react_agent
 from agentcrewchat.graph.nodes.reviewer_agent import review_task
 from agentcrewchat.tools.tool_registry import create_tools_for_task
@@ -90,6 +91,8 @@ def run_orchestration(
     layers = _topological_sort(tasks)
     all_results: list[dict] = []
     completed_tasks: dict[str, dict] = {}
+    used_names: set[str] = set()
+    used_colors: set[str] = set()
 
     emit_event(thread_id, {
         "type": "agent_join",
@@ -124,22 +127,30 @@ def run_orchestration(
             tool_ids = task.get("tools", [])
             deps = task.get("depends_on", [])
 
+            # 创建执行 Agent 身份
+            identity = create_executor_identity(task_id, used_names, used_colors)
+
             # @上游 Agent 互动
             if deps:
-                dep_names = [completed_tasks[d]["task_name"] for d in deps if d in completed_tasks]
-                if dep_names:
-                    mentions = "、".join(f"@{n}" for n in dep_names)
+                dep_executor_names = [
+                    completed_tasks[d]["executor_name"]
+                    for d in deps if d in completed_tasks and completed_tasks[d].get("executor_name")
+                ]
+                if dep_executor_names:
+                    mentions = "、".join(f"@{n}" for n in dep_executor_names)
                     emit_event(thread_id, {
                         "type": "agent_output",
                         "timestamp": _ts(),
                         "phase": "experts",
                         "agent": "experts",
+                        "agent_name": identity.name,
+                        "agent_color": identity.color,
                         "content": f"{mentions} 的产出我看到了，接下来轮到我「{task_name}」了！",
-                        "metadata": {"agent_name": task_name, "task_id": task_id},
+                        "metadata": {"agent_name": identity.name, "task_id": task_id},
                     })
 
             # 创建工具
-            tools = create_tools_for_task(tool_ids, workspace)
+            tools = create_tools_for_task(tool_ids, workspace, task_id=task_id)
 
             # 执行 + 审核 + 重试循环
             retry_feedback = None
@@ -156,6 +167,9 @@ def run_orchestration(
                     workspace_path=str(workspace),
                     thread_id=thread_id,
                     retry_feedback=retry_feedback,
+                    executor_name=identity.name,
+                    executor_color=identity.color,
+                    executor_personality_prompt=identity.personality_prompt,
                 )
                 final_result = result
 
@@ -184,13 +198,16 @@ def run_orchestration(
                         "timestamp": _ts(),
                         "phase": "experts",
                         "agent": "experts",
+                        "agent_name": identity.name,
+                        "agent_color": identity.color,
                         "content": f"🔄 任务「{task_name}」审核未通过（第 {attempt + 1}/{MAX_AGENT_RETRY} 次），根据反馈重新执行...",
-                        "metadata": {"agent_name": task_name, "task_id": task_id},
+                        "metadata": {"agent_name": identity.name, "task_id": task_id},
                     })
 
             # 记录最终结果
             final_result["review_passed"] = review_passed
             final_result["retry_count"] = min(attempt, MAX_AGENT_RETRY) if final_result["status"] != "error" else 0
+            final_result["executor_name"] = identity.name
             completed_tasks[task_id] = final_result
             all_results.append(final_result)
 
@@ -204,8 +221,10 @@ def run_orchestration(
                     "timestamp": _ts(),
                     "phase": "experts",
                     "agent": "experts",
-                    "content": f"✅ 任务「{task_name}」执行并通过审核！（工具调用: {final_result['tool_calls_count']}次）",
-                    "metadata": {"agent_name": task_name, "task_id": task_id},
+                    "agent_name": identity.name,
+                    "agent_color": identity.color,
+                    "content": f"✅ 任务「{task_name}」执行完毕并通过审核！（工具调用: {final_result['tool_calls_count']}次）",
+                    "metadata": {"agent_name": identity.name, "task_id": task_id},
                 })
             else:
                 emit_event(thread_id, {
@@ -213,8 +232,10 @@ def run_orchestration(
                     "timestamp": _ts(),
                     "phase": "experts",
                     "agent": "experts",
+                    "agent_name": identity.name,
+                    "agent_color": identity.color,
                     "content": f"⚠️ 任务「{task_name}」经过 {MAX_AGENT_RETRY} 次重试仍未通过审核，先记录结果继续推进",
-                    "metadata": {"agent_name": task_name, "task_id": task_id},
+                    "metadata": {"agent_name": identity.name, "task_id": task_id},
                 })
 
     # 汇总

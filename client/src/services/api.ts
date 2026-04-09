@@ -104,6 +104,9 @@ export const tasksApi = {
     request<{ status: string }>(`/tasks/${id}`, {
       method: "DELETE",
     }),
+
+  getChatHistory: (taskId: string) =>
+    request<ChatEvent[]>(`/tasks/${taskId}/chat-history`),
 };
 
 // ── 健康检查 ────────────────────────────────────────

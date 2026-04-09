@@ -71,3 +71,17 @@ async def remove_task(task_id: str) -> dict:
     except Exception as exc:
         raise HTTPException(500, str(exc)) from exc
     return {"status": "ok"}
+
+
+@router.get("/{task_id}/chat-history")
+async def get_chat_history(task_id: str) -> list[dict]:
+    """获取项目组的聊天历史事件。"""
+    from agentcrewchat.paths import workspaces_dir
+
+    history_path = workspaces_dir() / task_id / "chat_history.json"
+    if not history_path.is_file():
+        return []
+    try:
+        return json.loads(history_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []

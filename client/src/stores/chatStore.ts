@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { ChatEvent } from "../types";
 import { graphSocket } from "../services/websocket";
+import { tasksApi } from "../services/api";
 
 const MIN_DISPLAY_MS = 2000;
 
@@ -35,6 +36,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isConsultantThinking: false,
 
   addEvent: (event) => {
+    // 去重：如果 events 中已有相同事件则跳过
+    const isDuplicate = get().events.some(
+      (e) =>
+        e.timestamp === event.timestamp &&
+        e.type === event.type &&
+        e.content === event.content
+    );
+    if (isDuplicate) return;
+
     // agent_output 走延迟队列，其余直接加入 events
     if (event.type === "agent_output") {
       const arrivalTs = Date.now();
@@ -97,7 +107,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       isConsultantThinking: false,
     }),
 
-  startCollect: (taskId: string) => {
+  startCollect: async (taskId: string) => {
+    // 拉取历史
+    let historyEvents: ChatEvent[] = [];
+    try {
+      historyEvents = await tasksApi.getChatHistory(taskId);
+    } catch { /* 忽略错误 */ }
+
     const sessionId = crypto.randomUUID();
     set({
       isCollecting: true,
@@ -105,7 +121,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       isPaused: false,
       isRunning: false,
       isInterrupted: false,
-      events: [],
+      events: historyEvents,
       pendingEvents: [],
     });
     graphSocket.connect(sessionId, {

@@ -82,8 +82,13 @@ async def _pump_graph_to_ws(
     q: queue.Queue[Any] = queue.Queue()
     thread_id = cfg.get("configurable", {}).get("thread_id", "")
 
-    from agentcrewchat.graph.event_bus import register_queue, unregister_queue
+    from agentcrewchat.graph.event_bus import register_queue, register_thread_task, unregister_queue
     register_queue(thread_id, q)
+
+    # 关联 thread_id → task_id 用于聊天历史持久化
+    task_id = input_obj.get("task_id", "") if isinstance(input_obj, dict) else ""
+    if task_id:
+        register_thread_task(thread_id, task_id)
 
     def worker() -> None:
         try:

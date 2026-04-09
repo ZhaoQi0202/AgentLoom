@@ -1,182 +1,153 @@
 import { useChatStore } from "../../stores/chatStore";
-import { AGENT_META, WORKFLOW_PHASES, type AgentId } from "../../types";
+import { AGENT_META, WORKFLOW_PHASES, type AgentId, type ChatEvent } from "../../types";
 import { AgentAvatar } from "../shared/AgentAvatar";
+import { GlassCard } from "../shared/GlassCard";
 
-export function RightPanel() {
-  const { currentPhase, events, isRunning, isCollecting } = useChatStore();
+// 四阶段面板定义
+const PHASE_PANELS = [
+  { key: "consult", label: "需求收集", agentIds: ["consultant"] as AgentId[] },
+  { key: "architect", label: "架构规划", agentIds: ["architect"] as AgentId[] },
+  { key: "execute", label: "执行", agentIds: ["experts"] as AgentId[] },
+  { key: "review", label: "审核", agentIds: ["reviewer"] as AgentId[] },
+] as const;
 
-  // 从事件流推断每个阶段的完成状态
-  const completedPhases = new Set<string>();
-  for (const e of events) {
-    if (e.type === "agent_output" && e.agent) {
-      completedPhases.add(e.agent);
-    }
-  }
+const PHASE_ORDER = ["consult", "architect", "execute", "review"];
 
-  // 活跃 Agent 列表
-  const activeAgents = WORKFLOW_PHASES.filter(
-    (id) => completedPhases.has(id) || id === currentPhase,
+function getPhaseStatus(
+  phaseKey: string,
+  events: ChatEvent[],
+  currentPhase: string | null,
+  isRunning: boolean,
+  isCollecting: boolean,
+): "pending" | "active" | "completed" | "error" {
+  const hasPhaseEvent = events.some(
+    (e) => e.phase === phaseKey && (e.type === "agent_output" || e.type === "agent_join")
+  );
+  const hasNextPhase = events.some(
+    (e) =>
+      e.phase !== phaseKey &&
+      e.type === "agent_join" &&
+      PHASE_ORDER.indexOf(e.phase || "") > PHASE_ORDER.indexOf(phaseKey)
+  );
+  const hasError = events.some(
+    (e) => e.phase === phaseKey && e.type === "error"
   );
 
-  // 动态执行 Agent（从 experts 阶段事件中提取）
-  const dynamicAgents: { name: string; taskId: string; status: string }[] = [];
+  if (hasError) return "error";
+  if (hasPhaseEvent && hasNextPhase) return "completed";
+  if (hasPhaseEvent || currentPhase === phaseKey) return "active";
+  // 特殊：collecting 阶段
+  if (phaseKey === "consult" && isCollecting) return "active";
+  return "pending";
+}
+
+interface DynamicAgent {
+  name: string;
+  color: string;
+  taskId: string;
+  status: string;
+}
+
+function extractDynamicAgents(events: ChatEvent[]): DynamicAgent[] {
+  const agents: DynamicAgent[] = [];
   const seenDynamic = new Set<string>();
+
   for (const e of events) {
-    const agentName = e.metadata?.agent_name as string | undefined;
+    const agentName = (e.agent_name || e.metadata?.agent_name) as string | undefined;
+    const agentColor = (e.agent_color) as string | undefined;
     const taskId = e.metadata?.task_id as string | undefined;
     if (agentName && taskId && !seenDynamic.has(taskId)) {
       seenDynamic.add(taskId);
-      dynamicAgents.push({ name: agentName, taskId, status: "running" });
+      agents.push({
+        name: agentName,
+        color: agentColor || "#0891b2",
+        taskId,
+        status: "running",
+      });
     }
   }
-  // 标记已完成的动态 Agent
+
+  // 标记已完成的
   for (const e of events) {
     const taskId = e.metadata?.task_id as string | undefined;
     if (taskId && e.content?.includes("执行完毕")) {
-      const agent = dynamicAgents.find((a) => a.taskId === taskId);
+      const agent = agents.find((a) => a.taskId === taskId);
       if (agent) agent.status = e.content.includes("✅") ? "completed" : "error";
     }
   }
 
+  return agents;
+}
+
+export function RightPanel() {
+  const { currentPhase, events, isRunning, isCollecting } = useChatStore();
+  const dynamicAgents = extractDynamicAgents(events);
+
   return (
     <aside className="w-[260px] shrink-0 border-l border-border-subtle bg-bg-surface/50 flex flex-col overflow-y-auto">
-      {/* 工作流进度 */}
+      {/* 四阶段面板 */}
       <div className="p-4 border-b border-border-subtle">
         <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">
           工作流进度
         </h3>
-        <div className="space-y-0">
-          {WORKFLOW_PHASES.map((phaseId, i) => {
-            const meta = AGENT_META[phaseId];
-            const isCompleted = completedPhases.has(phaseId) && phaseId !== currentPhase;
-            const isCurrent = phaseId === currentPhase;
-            const isPending = !isCompleted && !isCurrent;
-
+        <div className="space-y-3">
+          {PHASE_PANELS.map((phase) => {
+            const status = getPhaseStatus(
+              phase.key, events, currentPhase, isRunning, isCollecting
+            );
             return (
-              <div key={phaseId} className="flex items-stretch gap-3">
-                {/* 时间线 */}
-                <div className="flex flex-col items-center w-6">
-                  <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0
-                      ${isCompleted
-                        ? "bg-status-success/20 text-status-success"
-                        : isCurrent
-                          ? "bg-status-warning/20 text-status-warning animate-pulse-glow"
-                          : "bg-bg-elevated text-text-disabled border border-border-subtle"
-                      }`}
-                  >
-                    {isCompleted ? "✓" : i + 1}
-                  </div>
-                  {i < WORKFLOW_PHASES.length - 1 && (
-                    <div
-                      className={`w-0.5 flex-1 min-h-[20px] my-1 rounded-full ${
-                        isCompleted
-                          ? "bg-status-success/40"
-                          : isCurrent
-                            ? "bg-status-warning/30"
-                            : "bg-border-subtle"
-                      }`}
-                    />
-                  )}
+              <GlassCard
+                key={phase.key}
+                className={`p-3 ${
+                  status === "active" ? "ring-1 ring-brand-purple/30" : ""
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-text-primary">
+                    {phase.label}
+                  </span>
+                  <StatusDot status={status} />
                 </div>
-                {/* 阶段信息 */}
-                <div className="pb-4 pt-0.5 min-w-0">
-                  <p
-                    className={`text-sm font-medium truncate ${
-                      isPending ? "text-text-disabled" : "text-text-primary"
-                    }`}
-                  >
-                    {meta.emoji} {meta.label}
-                  </p>
-                  <p className="text-[11px] text-text-muted mt-0.5">
-                    {isCompleted
-                      ? "已完成"
-                      : isCurrent
-                        ? isCollecting
-                          ? "需求收集中..."
-                          : isRunning
-                            ? "运行中..."
-                            : "等待审核"
-                        : "未开始"}
-                  </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {phase.agentIds.map((agentId) => {
+                    const meta = AGENT_META[agentId];
+                    return (
+                      <div key={agentId} className="flex items-center gap-1.5">
+                        <AgentAvatar agentId={agentId} size={24} />
+                        <span
+                          className="text-[11px]"
+                          style={{ color: meta.nameColor }}
+                        >
+                          {meta.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {phase.key === "execute" &&
+                    dynamicAgents.map((agent) => (
+                      <div
+                        key={agent.taskId}
+                        className="flex items-center gap-1.5"
+                      >
+                        <div
+                          className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold"
+                          style={{ backgroundColor: agent.color }}
+                        >
+                          {agent.name[0]}
+                        </div>
+                        <span
+                          className="text-[11px]"
+                          style={{ color: agent.color }}
+                        >
+                          {agent.name}
+                        </span>
+                      </div>
+                    ))}
                 </div>
-              </div>
+              </GlassCard>
             );
           })}
         </div>
-      </div>
-
-      {/* 活跃 Agent */}
-      <div className="p-4 border-b border-border-subtle">
-        <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">
-          活跃 Agent
-        </h3>
-        {activeAgents.length === 0 && dynamicAgents.length === 0 ? (
-          <p className="text-xs text-text-muted">暂无活跃 Agent</p>
-        ) : (
-          <div className="space-y-2">
-            {activeAgents.map((id) => {
-              const meta = AGENT_META[id];
-              const isCurrent = id === currentPhase;
-              return (
-                <div
-                  key={id}
-                  className="flex items-center gap-2.5 p-2 rounded-lg bg-bg-elevated"
-                >
-                  <AgentAvatar agentId={id} size={28} />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium truncate" style={{ color: meta.nameColor }}>
-                      {meta.label}
-                    </p>
-                    <p className="text-[10px] text-text-muted">
-                      {isCurrent ? "活跃" : "已完成"}
-                    </p>
-                  </div>
-                  <span
-                    className={`w-2 h-2 rounded-full shrink-0 ${
-                      isCurrent ? "bg-status-success animate-pulse-glow" : "bg-text-disabled"
-                    }`}
-                  />
-                </div>
-              );
-            })}
-            {dynamicAgents.map((agent) => (
-              <div
-                key={agent.taskId}
-                className="flex items-center gap-2.5 p-2 rounded-lg bg-bg-elevated"
-              >
-                <div
-                  className="rounded-full flex items-center justify-center text-white font-medium shrink-0"
-                  style={{
-                    width: 28,
-                    height: 28,
-                    background: "linear-gradient(135deg, #22c55e, #10b981)",
-                    fontSize: 11,
-                  }}
-                >
-                  ⚡
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium truncate text-emerald-600">
-                    {agent.name}
-                  </p>
-                  <p className="text-[10px] text-text-muted">
-                    {agent.status === "completed" ? "已完成" : agent.status === "error" ? "有问题" : "执行中"}
-                  </p>
-                </div>
-                <span
-                  className={`w-2 h-2 rounded-full shrink-0 ${
-                    agent.status === "completed"
-                      ? "bg-text-disabled"
-                      : agent.status === "error"
-                        ? "bg-status-error"
-                        : "bg-status-success animate-pulse-glow"
-                  }`}
-                />
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* 任务信息 */}
@@ -185,12 +156,45 @@ export function RightPanel() {
           任务信息
         </h3>
         <dl className="space-y-2 text-xs">
-          <InfoRow label="状态" value={isRunning ? "运行中" : currentPhase ? "已暂停" : "未开始"} />
-          <InfoRow label="当前阶段" value={currentPhase ? AGENT_META[currentPhase as AgentId]?.label ?? currentPhase : "—"} />
+          <InfoRow
+            label="状态"
+            value={
+              isRunning
+                ? "运行中"
+                : currentPhase
+                  ? "已暂停"
+                  : "未开始"
+            }
+          />
+          <InfoRow
+            label="当前阶段"
+            value={
+              currentPhase
+                ? PHASE_PANELS.find((p) => p.key === currentPhase)?.label ??
+                  currentPhase
+                : "—"
+            }
+          />
           <InfoRow label="事件数" value={String(events.length)} />
         </dl>
       </div>
     </aside>
+  );
+}
+
+function StatusDot({
+  status,
+}: {
+  status: "pending" | "active" | "completed" | "error";
+}) {
+  const colors = {
+    pending: "bg-text-disabled",
+    active: "bg-status-warning animate-pulse-glow",
+    completed: "bg-status-success",
+    error: "bg-status-error",
+  };
+  return (
+    <span className={`w-2 h-2 rounded-full shrink-0 ${colors[status]}`} />
   );
 }
 
