@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -57,4 +58,13 @@ def delete_task(task_id: str) -> None:
     path = workspaces_dir() / task_id
     if not path.exists() or not path.is_dir():
         raise FileNotFoundError(f"Task directory not found: {task_id}")
-    shutil.rmtree(path)
+    # Windows 上 .venv 内文件可能被锁定，需要 onerror 处理只读文件
+    def _on_rm_error(_func, _path, _exc_info):
+        import stat
+        try:
+            os.chmod(_path, stat.S_IWRITE)
+            os.remove(_path)
+        except OSError:
+            pass
+
+    shutil.rmtree(path, onerror=_on_rm_error)
