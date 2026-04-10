@@ -39,10 +39,22 @@ def _ts() -> str:
 
 
 def _iter_graph_events(graph: Any, input_obj: Any, cfg: dict) -> Iterator[dict[str, Any]]:
+    # 手动发过的节点不再重复发 agent_join/agent_output
+    _suppress_nodes = {"consultant", "architect"}
+
     for chunk in graph.stream(input_obj, cfg, stream_mode="updates"):
         parts, has_interrupt = split_stream_chunk(chunk)
         for node, upd in parts:
             phase = upd.get("phase", node)
+
+            # 跳过已手动处理过的节点事件
+            if node in _suppress_nodes:
+                continue
+
+            # hitl_blueprint 不产生 agent_join，只在 interrupt 时产生 hitl_interrupt
+            if node == "hitl_blueprint":
+                continue
+
             yield {
                 "type": "agent_join",
                 "timestamp": _ts(),
@@ -77,7 +89,8 @@ def _iter_graph_events(graph: Any, input_obj: Any, cfg: dict) -> Iterator[dict[s
 
 
 async def _pump_graph_to_ws(
-    websocket: WebSocket, graph: Any, input_obj: Any, cfg: dict
+    websocket: WebSocket, graph: Any, input_obj: Any, cfg: dict,
+    session: dict[str, Any] | None = None,
 ) -> None:
     q: queue.Queue[Any] = queue.Queue()
     thread_id = cfg.get("configurable", {}).get("thread_id", "")
@@ -110,15 +123,56 @@ async def _pump_graph_to_ws(
             q.put(_SENTINEL)
 
     threading.Thread(target=worker, daemon=True).start()
-    while True:
-        item = await asyncio.to_thread(q.get)
-        if item is _SENTINEL:
-            break
-        try:
-            await websocket.send_json(item)
-        except Exception:
-            # WS 已断开，事件已由 event_bus 持久化，跳过推送
-            pass
+
+    # 事件推送 task
+    async def push_events():
+        while True:
+            item = await asyncio.to_thread(q.get)
+            if item is _SENTINEL:
+                break
+            try:
+                await websocket.send_json(item)
+            except Exception:
+                pass
+
+    # 接收用户操作 task（暂停/继续/决策等）
+    async def receive_actions():
+        while True:
+            try:
+                raw = await websocket.receive_text()
+                msg = json.loads(raw)
+                action = msg.get("action")
+                _handle_inline_action(action, msg, session, thread_id)
+            except Exception:
+                break
+
+    # 并发运行：推送事件 + 接收操作
+    push_task = asyncio.create_task(push_events())
+    recv_task = asyncio.create_task(receive_actions())
+    # push_events 完成即图谱结束，取消接收 task
+    await push_task
+    recv_task.cancel()
+
+
+def _handle_inline_action(action: str, msg: dict, session: dict | None, thread_id: str) -> None:
+    """在图谱执行期间处理用户内联操作（暂停/继续/决策）。"""
+    if action == "pause":
+        from agentcrewchat.graph.pause_manager import pause as pm_pause
+        if thread_id:
+            pm_pause(thread_id)
+    elif action == "resume_pause":
+        from agentcrewchat.graph.pause_manager import resume as pm_resume
+        if thread_id:
+            pm_resume(thread_id)
+    elif action == "decision":
+        from agentcrewchat.graph.decision_handler import submit_decision, classify_user_input
+        decision_type = msg.get("decision", "")
+        user_text = msg.get("message", "")
+        if decision_type in ("skip", "reroute", "terminate"):
+            submit_decision(thread_id, decision_type)
+        elif user_text:
+            classified = classify_user_input(user_text, True)
+            submit_decision(thread_id, classified)
 
 
 async def _run_pipeline_after_confirm(
@@ -203,6 +257,7 @@ async def _run_pipeline_after_confirm(
         graph_new,
         {"task_id": task_id, "user_request": user_request, "_thread_id": thread_id_new},
         cfg_new,
+        session=session,
     )
 
 
@@ -234,14 +289,15 @@ async def graph_websocket(websocket: WebSocket, session_id: str):
                     "content": "已收到任务，正在运行图谱…",
                 })
 
+                _sessions[session_id] = {"graph": graph, "cfg": cfg, "thread_id": thread_id, "ws": websocket, "ws_connected": True}
+
                 await _pump_graph_to_ws(
                     websocket,
                     graph,
                     {"task_id": task_id, "user_request": user_request, "_thread_id": thread_id},
                     cfg,
+                    session=_sessions[session_id],
                 )
-
-                _sessions[session_id] = {"graph": graph, "cfg": cfg, "thread_id": thread_id, "ws": websocket, "ws_connected": True}
 
             elif action == "resume":
                 feedback = msg.get("feedback", {})
@@ -258,7 +314,7 @@ async def graph_websocket(websocket: WebSocket, session_id: str):
                 cfg = session["cfg"]
                 resume_input = Command(resume=feedback if feedback else {})
 
-                await _pump_graph_to_ws(websocket, graph, resume_input, cfg)
+                await _pump_graph_to_ws(websocket, graph, resume_input, cfg, session=session)
 
             elif action == "collect":
                 task_id = msg.get("task_id", "api-task")

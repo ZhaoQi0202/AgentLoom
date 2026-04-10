@@ -115,6 +115,7 @@ def _execute_single_task(
     task_name = task.get("name", task_id)
     task_goal = task.get("goal", "")
     criteria = task.get("acceptance_criteria", [])
+    checkpoints = task.get("checkpoints", [])
     tool_ids = task.get("tools", [])
     deps = task.get("depends_on", [])
 
@@ -161,6 +162,7 @@ def _execute_single_task(
             executor_name=identity.name,
             executor_color=identity.color,
             executor_personality_prompt=identity.personality_prompt,
+            checkpoints=checkpoints,
         )
         final_result = result
 
@@ -359,6 +361,26 @@ def run_orchestration(
             "agent_color": ident.color,
             "metadata": {"task_id": task["id"], "task_name": task.get("name", task["id"])},
         })
+
+    # 明哲发任务分配消息：@每个小某分配任务和汇报节点
+    assignment_lines = []
+    for task in tasks:
+        ident = task_identities[task["id"]]
+        task_name = task.get("name", task["id"])
+        checkpoints = task.get("checkpoints", [])
+        cp_text = ""
+        if checkpoints:
+            cp_items = "、".join(f"「{cp}」" for cp in checkpoints)
+            cp_text = f"，到这些节点时在群里汇报：{cp_items}"
+        assignment_lines.append(f"@{ident.name} 你负责「{task_name}」{cp_text}")
+    assignment_msg = "任务分配如下，各位开始吧！💪\n\n" + "\n".join(assignment_lines)
+    emit_event(thread_id, {
+        "type": "agent_output",
+        "timestamp": _ts(),
+        "phase": "execute",
+        "agent": "architect",
+        "content": assignment_msg,
+    })
 
     # 按层执行
     for layer_idx, layer in enumerate(layers):

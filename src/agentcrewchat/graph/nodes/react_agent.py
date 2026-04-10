@@ -39,6 +39,7 @@ def run_react_agent(
     executor_name: str = "",
     executor_color: str = "",
     executor_personality_prompt: str = "",
+    checkpoints: list[str] | None = None,
 ) -> dict[str, Any]:
     """运行一个 ReAct Agent 完成指定任务。
 
@@ -75,6 +76,14 @@ def run_react_agent(
         f"5. 不要使用 Markdown 标题格式，像在工作群里汇报一样说话\n"
         f"6. 总结时说做了什么和结果，不要罗列工具调用细节\n"
     )
+
+    if checkpoints:
+        cp_list = "\n".join(f"  - {cp}" for cp in checkpoints)
+        system_prompt += (
+            f"\n## 汇报节点\n"
+            f"架构师要求你在以下节点完成时在群里汇报进度：\n{cp_list}\n"
+            f"到达这些节点时，用一句话说明完成情况。\n"
+        )
 
     if executor_personality_prompt:
         system_prompt += f"\n\n## 你的性格\n{executor_personality_prompt}\n"

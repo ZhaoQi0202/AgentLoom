@@ -33,6 +33,7 @@ ARCHITECT_SYSTEM_PROMPT = """\
       "name": "任务名称",
       "goal": "这个任务要达成什么目标",
       "acceptance_criteria": ["验收标准1", "验收标准2"],
+      "checkpoints": ["完成XX后汇报", "YY创建完成后汇报"],
       "tools": ["tool_id_1", "tool_id_2"],
       "depends_on": []
     },
@@ -41,6 +42,7 @@ ARCHITECT_SYSTEM_PROMPT = """\
       "name": "另一个任务",
       "goal": "目标描述",
       "acceptance_criteria": ["验收标准"],
+      "checkpoints": ["完成后汇报"],
       "tools": ["tool_id"],
       "depends_on": ["t1"]
     }
@@ -56,6 +58,7 @@ ARCHITECT_SYSTEM_PROMPT = """\
 
 ## 规则
 - 每个任务的 tools 只能使用可用工具清单中的工具 ID 或内置能力（shell、python）
+- 每个任务必须有 checkpoints 字段，定义执行 Agent 需要在群里汇报进度的节点（如"文件创建完成"、"依赖安装完成"）
 - 任务之间的 depends_on 要合理，体现真实的依赖关系
 - 没有依赖的任务可以并行执行
 - 任务粒度适中，不要太大也不要太碎
