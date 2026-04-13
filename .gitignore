@@ -14,3 +14,4 @@ config/settings.json
 config/model_connections/*.json
 .superpowers/
 tests/_*.py
+/docs/
